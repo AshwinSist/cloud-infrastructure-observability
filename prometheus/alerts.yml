@@ -1,0 +1,93 @@
+
+groups:
+  - name: infrastructure-alerts
+    rules:
+
+      # 1. High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 20
+        for: 2m
+        labels:
+          severity: high
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage has remained above 20% for 2 minutes."
+
+      # 2. High Memory Usage
+      - alert: HighMemoryUsage
+        expr: 100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 40
+        for: 2m
+        labels:
+          severity: high
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage has remained above 40% for 2 minutes."
+
+      # 3. High Disk Usage
+      - alert: HighDiskUsage
+        expr: |
+          100 * (
+            1 -
+            (
+              node_filesystem_avail_bytes{
+                fstype!~"tmpfs|overlay|squashfs|nsfs|9p",
+                mountpoint!~"/(proc|sys|dev|run)($|/)"
+              }
+              /
+              node_filesystem_size_bytes{
+                fstype!~"tmpfs|overlay|squashfs|nsfs|9p",
+                mountpoint!~"/(proc|sys|dev|run)($|/)"
+              }
+            )
+          ) > 40
+        for: 2m
+        labels:
+          severity: high
+        annotations:
+          summary: "High disk usage detected"
+          description: "Disk usage has remained above 40% on {{ $labels.mountpoint }} for 2 minutes."
+
+      # 4. cAdvisor Unavailable
+      - alert: CadvisorUnavailable
+        expr: up{job="cadvisor"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "cAdvisor is unavailable"
+          description: "Prometheus cannot scrape cAdvisor for more than 1 minute. Individual container status may be unavailable."
+
+      # 5. Node Exporter Down
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node Exporter is unavailable"
+          description: "Prometheus cannot scrape Node Exporter for more than 1 minute."
+
+      # 6. High Network Traffic
+      - alert: HighNetworkTraffic
+        expr: |
+          (
+            rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[5m])
+            +
+            rate(node_network_transmit_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[5m])
+          ) > 12500000
+        for: 2m
+        labels:
+          severity: high
+        annotations:
+          summary: "High network traffic detected"
+          description: "Network traffic on {{ $labels.device }} has exceeded 100 Mbps for 2 minutes."
+
+      # 7. Network Interface Down
+      - alert: NetworkInterfaceDown
+        expr: node_network_up{device!~"lo|docker.*|veth.*|br-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Network interface is down"
+          description: "Network interface {{ $labels.device }} is reporting as unavailable."

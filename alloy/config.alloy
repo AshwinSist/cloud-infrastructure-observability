@@ -1,0 +1,36 @@
+discovery.docker "local" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+discovery.relabel "filter_containers" {
+  targets = discovery.docker.local.targets
+
+  // Exclude Loki to prevent collecting its own logs.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/observability-loki"
+    action        = "drop"
+  }
+
+  // Add the Docker container name as a searchable label.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.filter_containers.output
+  labels     = { job = "docker" }
+  forward_to = [loki.write.local_loki.receiver]
+}
+
+loki.write "local_loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
